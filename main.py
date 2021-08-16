@@ -1,8 +1,7 @@
-from flask import Flask, jsonify
+from flask import Flask
 from pymongo import MongoClient
-from pprint import pprint
-from time import strftime
 from bson import json_util
+from flask_cors import CORS
 import json
 
 with open('conf/conf.json') as f:
@@ -16,6 +15,7 @@ leagues = db["Leagues"] # Leagues collection
 fixtures = db["Fixtures"] # Fixtures collection
 
 app = Flask(__name__)
+CORS(app)
 
 # Route to collect the countries
 @app.route("/countries")
