@@ -17,6 +17,7 @@ fixtures = db["Fixtures"] # Fixtures collection
 
 app = Flask(__name__)
 
+# Route to collect the countries
 @app.route("/countries")
 def getCountries():
     response = app.response_class(
@@ -26,6 +27,7 @@ def getCountries():
     )
     return response
 
+# Route to collect the leagues
 @app.route("/leagues")
 def getLeagues():
     response = app.response_class(
@@ -35,6 +37,7 @@ def getLeagues():
     )
     return response
 
+# Route to collect the fixtures
 @app.route("/fixtures")
 def getFixtures():
     response = app.response_class(
