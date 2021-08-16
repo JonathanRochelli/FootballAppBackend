@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, request
 from pymongo import MongoClient
 from bson import json_util
 from flask_cors import CORS
@@ -21,7 +21,7 @@ CORS(app)
 @app.route("/countries")
 def getCountries():
     response = app.response_class(
-        response=json_util.dumps(countries.find()),
+        response=json_util.dumps(list(countries.find())[0]),
         status=200,
         mimetype='application/json'
     )
@@ -30,8 +30,9 @@ def getCountries():
 # Route to collect the leagues
 @app.route("/leagues")
 def getLeagues():
+    country = request.args.get('country')
     response = app.response_class(
-        response=json_util.dumps(leagues.find()),
+        response=json_util.dumps(leagues.find({"country.name" : country})),
         status=200,
         mimetype='application/json'
     )
@@ -41,7 +42,7 @@ def getLeagues():
 @app.route("/fixtures")
 def getFixtures():
     response = app.response_class(
-        response=json_util.dumps(fixtures.find()),
+        response=json_util.dumps(list(fixtures.find())[0]),
         status=200,
         mimetype='application/json'
     )
