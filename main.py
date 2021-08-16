@@ -34,3 +34,12 @@ def getLeagues():
         mimetype='application/json'
     )
     return response
+
+@app.route("/fixtures")
+def getFixtures():
+    response = app.response_class(
+        response=json_util.dumps(fixtures.find()),
+        status=200,
+        mimetype='application/json'
+    )
+    return response
