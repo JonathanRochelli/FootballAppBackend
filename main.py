@@ -25,3 +25,12 @@ def getCountries():
         mimetype='application/json'
     )
     return response
+
+@app.route("/leagues")
+def getLeagues():
+    response = app.response_class(
+        response=json_util.dumps(leagues.find()),
+        status=200,
+        mimetype='application/json'
+    )
+    return response
