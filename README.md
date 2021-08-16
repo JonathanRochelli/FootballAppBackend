@@ -20,7 +20,7 @@ pip install -r requirements.txt
 
 2. Set up the MongoDB database
 
-You can follow the steps available on this [repository](https://github.com/JonathanRochelli/FootballAppScraper)
+You can follow the steps available on this [website](https://docs.mongodb.com/manual/installation/)
 
 3. Run the application
 
