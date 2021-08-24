@@ -21,7 +21,7 @@ CORS(app)
 @app.route("/countries")
 def getCountries():
     response = app.response_class(
-        response=json_util.dumps(list(countries.find())[0]),
+        response=json_util.dumps(list(countries.find({}))),
         status=200,
         mimetype='application/json'
     )
