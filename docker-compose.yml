@@ -9,3 +9,10 @@ services:
       - host=db
       - port=27017
       - db=football-app-ab
+  db:
+    image: "mongo:latest"
+    container_name: "football-app-db"
+    environment: 
+      - MONGO_INITDB_DATABASE=football-app-db
+    ports: 
+      - "27017:27017"
