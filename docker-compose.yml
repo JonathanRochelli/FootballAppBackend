@@ -1,0 +1,11 @@
+version: "3.9"
+services:
+  backend:
+    build: .
+    container_name: "football-app-backend"
+    ports:
+      - "5000:5000"
+    environment:
+      - host=db
+      - port=27017
+      - db=football-app-ab
