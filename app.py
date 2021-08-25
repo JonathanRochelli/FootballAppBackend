@@ -3,13 +3,14 @@ from pymongo import MongoClient
 from bson import json_util
 from flask_cors import CORS
 import json
+import os
 
 with open('conf/conf.json') as f:
     conf = json.load(f)
 
 # MongoDb configuration
-client = MongoClient("{}:{}".format(conf["host"], conf["port"]))
-db=client[conf["db"]]
+client = MongoClient("{}:{}".format(os.environ["host"], os.environ["port"]))
+db=client[os.environ["db"]]
 countries = db["Countries"] # Countries collection
 leagues = db["Leagues"] # Leagues collection
 fixtures = db["Fixtures"] # Fixtures collection
@@ -72,3 +73,6 @@ def getFixtures():
         mimetype='application/json'
     )
     return response
+
+if __name__ == "__main__":
+    app.run('0.0.0.0', debug=True, port=5000, ssl_context=('./ssl/server.crt', './ssl/server.key'))
