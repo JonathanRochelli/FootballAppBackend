@@ -4,6 +4,7 @@ from bson import json_util
 from flask_cors import CORS
 import json
 import os
+import pendulum
 
 with open('conf/conf.json') as f:
     conf = json.load(f)
@@ -11,9 +12,9 @@ with open('conf/conf.json') as f:
 # MongoDb configuration
 client = MongoClient("{}:{}".format(os.environ["host"], os.environ["port"]))
 db=client[os.environ["db"]]
-countries = db["Countries"] # Countries collection
-leagues = db["Leagues"] # Leagues collection
-fixtures = db["Fixtures"] # Fixtures collection
+countries_col = db["Countries"] # Countries collection
+leagues_col = db["Leagues"] # Leagues collection
+fixtures_col = db["Fixtures"] # Fixtures collection
 
 app = Flask(__name__)
 CORS(app)
@@ -22,7 +23,7 @@ CORS(app)
 @app.route("/countries")
 def getCountries():
     response = app.response_class(
-        response=json_util.dumps(list(countries.find({}))),
+        response=json_util.dumps(list(countries_col.find({}))),
         status=200,
         mimetype='application/json'
     )
@@ -33,7 +34,7 @@ def getCountries():
 def getLeagues():
     country = request.args.get('country')
     response = app.response_class(
-        response=json_util.dumps(leagues.find({"country.name" : country})),
+        response=json_util.dumps(leagues_col.find({"country.name" : country})),
         status=200,
         mimetype='application/json'
     )
@@ -42,7 +43,7 @@ def getLeagues():
 # Route to collect all the leagues 
 @app.route("/leagues/all")
 def getAllLeagues():
-    data = leagues.find({ "$or" : [{"country.name" : "France"}, {"country.name" : "Germany"}, {"country.name" : "Italy"}, {"country.name" : "Portugal"}, {"country.name" : "Spain"}, {"country.name" : "England"}, {"country.name" : "Belgium"}, {"country.name" : "World"}] })
+    data = leagues_col.find({})
     response = {
         "France" : [],
         "Italy" : [],
@@ -64,15 +65,16 @@ def getAllLeagues():
 
 
 # Route to collect the fixtures
-@app.route("/fixtures")
+@app.route("/fixtures/sunday")
 def getFixtures():
-    league = request.args.get('league')
+    # Find next sunday
+    next_sunday = pendulum.now().next(pendulum.SUNDAY).timestamp()
     response = app.response_class(
-        response=json_util.dumps(fixtures.find({"league.name" : league})),
+        response=json_util.dumps(fixtures_col.find({ "fixture.timestamp" : {"$gte" : next_sunday}})),
         status=200,
         mimetype='application/json'
     )
     return response
 
 if __name__ == "__main__":
-    app.run('0.0.0.0', debug=True, port=5000, ssl_context=('./ssl/server.crt', './ssl/server.key'))
+    app.run('0.0.0.0', debug=True, port=5000)
