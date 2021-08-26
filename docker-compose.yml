@@ -10,7 +10,7 @@ services:
     environment:
       - host=db
       - port=27017
-      - db=football-app-ab
+      - db=football-app-db
   db:
     image: "mongo:latest"
     container_name: "football-app-db"
