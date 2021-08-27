@@ -134,6 +134,13 @@ def getData(url, query):
     data = json.loads(requests.request("GET", url, headers=headers, params=query).text)["response"]
     return data
 
+# Insert the data in the database
+# Function called when the data in database need to be inserted
+# @params
+# collection : The collection which needs insert
+# data : Data list
+# update_query : Query to update the log time in the update collection
+# message : The message to display
 def insertData(collection, data, update_query):
     # Save fixtures in local database
     insert = collection.insert_many(data) 
@@ -141,13 +148,26 @@ def insertData(collection, data, update_query):
     log = updates_col.insert_one(update_query) 
     return (insert, log)
 
-def updateData(collection, data, find_query, update_query, printMessage):
-    for elt in data:
-        to_update = collection.find_one(find_query) 
-        update = odds_col.update_one(to_update, elt)
-        log = collection.update_one(update_query)
-        printResult(update, log, printMessage)
+# Update the data in the database
+# Function called when the data in database need to be updated
+# @params
+# collection : The collection which needs update
+# data : New data list
+# find_query : Query to find the last value
+# update_query : Query to update the log time in the update collection
+# message : The message to display
+def updateData(collection, data, find_query, update_query, message):
+    for elt in data: # For each element of the data list
+        to_update = collection.find_one(find_query) # Find the last value
+        update = odds_col.update_one(to_update, elt) # Update with the new value
+        log = collection.update_one(update_query) # Update time in log collcetion
+        printResult(update, log, message) # Display the status messages
 
+# Display message to show the status
+# @params
+# insert : Result of data insertion
+# log : Result of log insertion
+# message : The message to display
 def printResult(insert, log, message):
     # Insertion feedback
     if insert : print(colored(f'{message} successed', 'green')) 
@@ -164,7 +184,9 @@ def getOddsForFixture(fixture):
 
 # Insert the odds in the local database for one fixture
 def insertOdds(fixture):
-    insert_status, log_status =insertData(odds_col, getOddsForFixture(fixture), {"odds" : fixture, "timestamp" : int(time())})
+    # Query to update the logs in the database
+    update_query = {"odds" : fixture, "timestamp" : int(time())} 
+    insert_status, log_status = insertData(odds_col, getOddsForFixture(fixture), update_query)
     printResult(insert_status, log_status, f"Fixture n°{fixture} - Odds insertion")
     return True
 
