@@ -8,7 +8,7 @@ import os
 import pendulum
 import requests
 from termcolor import colored
-from datetime import datetime
+import threading
 
 with open('conf/conf.json') as f:
     conf = json.load(f)
@@ -20,6 +20,7 @@ countries_col = db["Countries"] # Countries collection
 leagues_col = db["Leagues"] # Leagues collection
 fixtures_col = db["Fixtures"] # Fixtures collection
 updates_col = db["Updates"] # Updates collection
+odds_col = db["Odds"] # Updates collection
 
 # Status API
 fixture_status = {
@@ -28,6 +29,7 @@ fixture_status = {
     "not_started" : ["TBD", "NS", "PST", "SUSP"]
 }
 
+leagues_selected = [61, 71, 94, 140, 39, 78, 2, 3, 1, 4]
 
 with open('conf/key.json') as f:
     key = json.load(f)
@@ -80,8 +82,9 @@ def getAllLeagues():
 def getFixtures():
     # Find next sunday
     next_sunday = pendulum.now().next(pendulum.SUNDAY).timestamp()
+    fixtures = fixtures_col.find({"$and": [{ "fixture.timestamp" : {"$gte" : next_sunday}}, {"league.id" : { "$in" : leagues_selected}}]})
     response = app.response_class(
-        response=json_util.dumps(fixtures_col.find({ "fixture.timestamp" : {"$gte" : next_sunday}})), # Return all the fixture after the next sunday
+        response=json_util.dumps(fixtures), # Return all the fixture after the next sunday
         status=200,
         mimetype='application/json'
     )
@@ -98,7 +101,6 @@ def getFixturesByLeague(league, status):
         if (int(time()) - last_update > 15*60) : # Update very 15 minutes
             updateFixture(league, last_update)
 
-    getOdds(league)
     fixtures = list(fixtures_col.find({"$and" : [{"league.id" : int(league)}, {"fixture.status.short" : { "$in" : fixture_status[status] }}]})) # Return fixtures saved in local database
     # Sort by timestamp
     fixtures.sort(key=lambda f: f["fixture"]["timestamp"])
@@ -109,39 +111,65 @@ def getFixturesByLeague(league, status):
     )
     return response
 
-############################### Odds ###############################
-def getOdds(league):
-    fixtures = list(fixtures_col.find({"league.id" : int(league)})) # Return fixtures saved in local database
-    for fixture in fixtures:
-        if (fixtures_col.count_documents({"fixture.odds" : fixture["fixture"]["id"]}) == 0):
-            addOdds(fixture["fixture"]["id"])
-        else :
-            last_update = updates_col.find_one({"fixture.odds" : fixture["fixture"]["id"]})["timestamp"] # Get last update
-            if (int(time()) - last_update > 1*3600*24) : # Update very day
-                addOdds(fixture["fixture"]["id"])
-    return True
+# Route to collect the fixtures filtered by league
+@app.route("/fixtures/<fixture>/odds")
+def getOdds(fixture):
+    # League fixtures was nerver saved
+    if (updates_col.count_documents({"odds" : fixture}) == 0):
+        insertOdds(fixture)
+    else :
+        last_update = updates_col.find_one({"odds" : fixture})["timestamp"] # Get last update
+        if (int(time()) - last_update > 60*60) : # Update very hours
+            updateOdds(fixture, last_update)
 
+    odds = list(odds_col.find({"fixture.id" : int(fixture)})) # Return odds saved in local database
+    response = app.response_class(
+        response=json_util.dumps(odds),
+        status=200,
+        mimetype='application/json'
+    )
+    return response
+
+############################### Odds ###############################
 def getOddsForFixture(fixture):
     url = "https://api-football-v1.p.rapidapi.com/v3/odds"
     querystring = {"fixture":fixture}
     odds = json.loads(requests.request("GET", url, headers=headers, params=querystring).text)["response"]
     return odds
 
-def addOdds(fixtureId):
+# Insert the odds in the local database for one fixture
+def insertOdds(fixture):
     # Get odds from API
-    odds = getOddsForFixture(fixtureId) 
-    # Find the fixture to update
-    fixture = fixtures_col.find_one({"fixture.id" : fixtureId})
-    # Save odds in local database
-    result = fixtures_col.update_one(fixture, { "$set" : { "odds" : odds } }) 
+    odds = getOddsForFixture(fixture) 
+    # Save fixtures in local database
+    result  = odds_col.insert_many(odds) 
     # Success message
-    if result : print(colored(f'Fixture n°{fixtureId} - Odds successfully inserted', 'green')) 
+    if result : print(colored(f'Fixture n°{fixture} - Odds successfully inserted', 'green')) 
     # Fail message
-    else : print(colored(f'Error : Fixture n°{fixtureId} - Odds insertion failed', 'red')) 
+    else : print(colored(f'Error : Fixture n°{fixture} - Odds insertion failed', 'red')) 
     # Insert last timestamp update for this league
-    result = updates_col.insert_one({"fixture.odds" : fixtureId, "timestamp" : int(time())}) 
+    result = updates_col.insert_one({"odds" : fixture, "timestamp" : int(time())}) 
     if result : print(colored('Timestamp successfully updated', 'green'))
     else : print(colored('Error : Timestamp update failed', 'red'))
+    return True
+
+# Update all the odds for one fixture in the local database
+def updateOdds (fixture, last_update):
+     # Get odds from API
+    odds = getOddsForFixture(fixture) 
+    for odd in odds:
+        # Find the odd to update
+        to_update = odds_col.find_one({"fixture.id" : fixture}) 
+        # Update odd with new informations
+        result = odds_col.update_one(to_update, odd) 
+        # Success message
+        if result : print(colored(f'Fixture n°{fixture} - Odds successfully updated', 'green')) 
+        # Fail message
+        else : print(colored(f'Error : Fixture n°{fixture} - Odds update failed', 'red')) 
+        # Update update timestamp
+        result = updates_col.update_one({"odds" : fixture, "timestamp" : last_update}, {"$set" : { "odds" : fixture, "timestamp" : int(time()) }})
+        if result : print(colored('Timestamp successfully updated', 'green'))
+        else : print(colored('Error : Timestamp update failed', 'red'))
     return True
 
 ############################### Fixtures ###############################
