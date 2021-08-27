@@ -98,7 +98,7 @@ def getFixturesByLeague(league, status):
         insertFixture(league)
     else :
         last_update = updates_col.find_one({"league" : league})["timestamp"] # Get last update
-        if (int(time()) - last_update > 15*60) : # Update very 15 minutes
+        if (int(time()) - last_update > 15) : # Update very 15 minutes
             updateFixture(league, last_update)
 
     fixtures = list(fixtures_col.find({"$and" : [{"league.id" : int(league)}, {"fixture.status.short" : { "$in" : fixture_status[status] }}]})) # Return fixtures saved in local database
@@ -130,46 +130,48 @@ def getOdds(fixture):
     )
     return response
 
+def getData(url, query):
+    data = json.loads(requests.request("GET", url, headers=headers, params=query).text)["response"]
+    return data
+
+def insertData(collection, data, update_query):
+    # Save fixtures in local database
+    insert = collection.insert_many(data) 
+    # Insert last timestamp update for this league
+    log = updates_col.insert_one(update_query) 
+    return (insert, log)
+
+def updateData(collection, data, find_query, update_query, printMessage):
+    for elt in data:
+        to_update = collection.find_one(find_query) 
+        update = odds_col.update_one(to_update, elt)
+        log = collection.update_one(update_query)
+        printResult(update, log, printMessage)
+
+def printResult(insert, log, message):
+    # Insertion feedback
+    if insert : print(colored(f'{message} successed', 'green')) 
+    else : print(colored(f'Error : {message} failed', 'red')) 
+    # Update feedback
+    if log : print(colored('Timestamp successfully updated', 'green'))
+    else : print(colored('Error : Timestamp update failed', 'red'))
+
 ############################### Odds ###############################
 def getOddsForFixture(fixture):
     url = "https://api-football-v1.p.rapidapi.com/v3/odds"
     querystring = {"fixture":fixture}
-    odds = json.loads(requests.request("GET", url, headers=headers, params=querystring).text)["response"]
-    return odds
+    return getData(url, querystring)
 
 # Insert the odds in the local database for one fixture
 def insertOdds(fixture):
-    # Get odds from API
-    odds = getOddsForFixture(fixture) 
-    # Save fixtures in local database
-    result  = odds_col.insert_many(odds) 
-    # Success message
-    if result : print(colored(f'Fixture n°{fixture} - Odds successfully inserted', 'green')) 
-    # Fail message
-    else : print(colored(f'Error : Fixture n°{fixture} - Odds insertion failed', 'red')) 
-    # Insert last timestamp update for this league
-    result = updates_col.insert_one({"odds" : fixture, "timestamp" : int(time())}) 
-    if result : print(colored('Timestamp successfully updated', 'green'))
-    else : print(colored('Error : Timestamp update failed', 'red'))
+    insert_status, log_status =insertData(odds_col, getOddsForFixture(fixture), {"odds" : fixture, "timestamp" : int(time())})
+    printResult(insert_status, log_status, f"Fixture n°{fixture} - Odds insertion")
     return True
 
 # Update all the odds for one fixture in the local database
 def updateOdds (fixture, last_update):
-     # Get odds from API
-    odds = getOddsForFixture(fixture) 
-    for odd in odds:
-        # Find the odd to update
-        to_update = odds_col.find_one({"fixture.id" : fixture}) 
-        # Update odd with new informations
-        result = odds_col.update_one(to_update, odd) 
-        # Success message
-        if result : print(colored(f'Fixture n°{fixture} - Odds successfully updated', 'green')) 
-        # Fail message
-        else : print(colored(f'Error : Fixture n°{fixture} - Odds update failed', 'red')) 
-        # Update update timestamp
-        result = updates_col.update_one({"odds" : fixture, "timestamp" : last_update}, {"$set" : { "odds" : fixture, "timestamp" : int(time()) }})
-        if result : print(colored('Timestamp successfully updated', 'green'))
-        else : print(colored('Error : Timestamp update failed', 'red'))
+    update_query = {"odds" : fixture, "timestamp" : last_update}, {"$set" : { "odds" : fixture, "timestamp" : int(time()) }}
+    updateData(odds_col, getOddsForFixture(fixture), {"fixture.id" : fixture}, update_query, f'Fixture n°{fixture} - Odds update')
     return True
 
 ############################### Fixtures ###############################
@@ -177,8 +179,12 @@ def updateOdds (fixture, last_update):
 def getFixtureFromLeague(league):
     url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
     querystring = {"league":league,"season":2021}
-    fixtures = json.loads(requests.request("GET", url, headers=headers, params=querystring).text)["response"]
-    return fixtures
+    return getData(url, querystring)
+
+# Insert the fixtures in the local database for one league
+def insertFixture(league):
+    insert_status, log_status = insertData(fixtures_col, getFixtureFromLeague(league), {"league" : league, "timestamp" : int(time())})
+    printResult(insert_status, log_status, f'League n°{league} - Fixtures insertion')
 
 # Update all the fixtures for one league in the local database
 def updateFixture (league, last_update):
@@ -188,31 +194,9 @@ def updateFixture (league, last_update):
         # Find the fixture to update
         to_update = fixtures_col.find_one({"fixture.id" : fixture["fixture"]["id"]}) 
         # Update fixture with new informations
-        result = fixtures_col.update_one(to_update, { "$set" : fixture }) 
-        # Success message
-        if result : print(colored(f'Fixture n°{fixture["fixture"]["id"]} - Fixtures successfully updated', 'green')) 
-        # Fail message
-        else : print(colored(f'Error : Fixture n°{fixture["fixture"]["id"]} - Fixtures update failed', 'red')) 
-        # Update update timestamp
-        result = updates_col.update_one({"league" : league, "timestamp" : last_update}, {"$set" : { "league" : league, "timestamp" : int(time()) }})
-        if result : print(colored('Timestamp successfully updated', 'green'))
-        else : print(colored('Error : Timestamp update failed', 'red'))
-    return True
-
-# Insert the fixtures in the local database for one league
-def insertFixture(league):
-    # Get fixture from API
-    fixtures = getFixtureFromLeague(league) 
-    # Save fixtures in local database
-    result  = fixtures_col.insert_many(fixtures) 
-    # Success message
-    if result : print(colored(f'League n°{league} - Fixtures successfully inserted', 'green')) 
-    # Fail message
-    else : print(colored(f'Error : League n°{league} - Fixtures insertion failed', 'red')) 
-    # Insert last timestamp update for this league
-    result = updates_col.insert_one({"league" : league, "timestamp" : int(time())}) 
-    if result : print(colored('Timestamp successfully updated', 'green'))
-    else : print(colored('Error : Timestamp update failed', 'red'))
+        update = fixtures_col.update_one(to_update, { "$set" : fixture }) 
+        log = updates_col.update_one({"league" : league, "timestamp" : last_update}, {"$set" : { "league" : league, "timestamp" : int(time()) }})
+        printResult(update, log, f'Fixture n°{fixture["fixture"]["id"]} - Fixture update')
     return True
 
 if __name__ == "__main__":
